@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Betting Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="w-64 bg-slate-900 text-white flex flex-col justify-between hidden md:flex transition-all duration-300">
+        <div>
+            <div class="p-5 text-xl font-bold border-b border-slate-800 text-blue-400">Admin Panel</div>
+            <nav class="p-4 space-y-2">
+                <button onclick="switchPage('users')" id="nav-users" class="w-full text-left px-4 py-2.5 rounded bg-blue-600 font-semibold text-white">User Management</button>
+                <button onclick="switchPage('matches')" id="nav-matches" class="w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-slate-300">Match Management</button>
+                <button onclick="switchPage('results')" id="nav-results" class="w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-slate-300">Match Results</button>
+                <button onclick="switchPage('transactions')" id="nav-transactions" class="w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-yellow-400">Transactions (ငွေသွင်း/ထုတ်)</button>
+                <button onclick="switchPage('bets')" id="nav-bets" class="w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-slate-300">Betting Records</button>
+                <button onclick="switchPage('risk')" id="nav-risk" class="w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-rose-400">Risk Management</button>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-800 text-sm text-slate-400 flex justify-between items-center">
+            <span>System v2.5</span>
+            <button onclick="adminLogout()" class="text-red-400 text-xs font-bold hover:underline cursor-pointer">Logout</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-h-screen">
+        <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-700 font-bold text-xl cursor-pointer">☰</button>
+                <h2 id="page-title" class="text-xl font-bold text-gray-800">User Management</h2>
+            </div>
+            <div class="text-sm font-semibold text-gray-600">Administrator</div>
+        </header>
+
+        <main class="p-6 flex-1 overflow-y-auto">
+
+            <!-- PAGE 1: USERS -->
+            <div id="page-users" class="space-y-6">
+                <div class="p-5 border rounded-lg bg-white shadow-sm">
+                    <h3 class="font-bold text-lg mb-4 text-blue-600">Create New User Account</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <input type="text" id="new-username" placeholder="Username" class="p-2.5 border rounded focus:outline-blue-500">
+                        <input type="password" id="new-password" placeholder="Password" class="p-2.5 border rounded focus:outline-blue-500">
+                        <input type="number" id="new-balance" placeholder="Initial Balance" class="p-2.5 border rounded focus:outline-blue-500">
+                    </div>
+                    <button onclick="createUser()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-semibold cursor-pointer transition-colors">Create Account</button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <h3 class="font-bold text-lg mb-4">Users List</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">No.</th>
+                                    <th class="border p-2.5">Username</th>
+                                    <th class="border p-2.5">Balance</th>
+                                    <th class="border p-2.5">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 2: MATCHES -->
+            <div id="page-matches" class="space-y-6 hidden">
+                <div class="p-5 border rounded-lg bg-white shadow-sm">
+                    <h3 class="font-bold text-lg mb-4 text-blue-600">Add New Match & Odds</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Select League</label>
+                            <select id="match-league" onchange="handleLeagueChange()" class="w-full p-2.5 border rounded bg-white font-medium focus:outline-blue-500">
+                                <option value="ENGLISH PREMIER LEAGUE">English Premier League</option>
+                                <option value="SPANISH LA LIGA">Spanish La Liga</option>
+                                <option value="ITALIAN SERIE A">Italian Serie A</option>
+                                <option value="GERMAN BUNDESLIGA">German Bundesliga</option>
+                                <option value="UEFA CHAMPIONS LEAGUE">UEFA Champions League</option>
+                                <option value="OTHER">Other (အခြားလိဂ်)</option>
+                            </select>
+                        </div>
+                        <div id="custom-league-box" class="hidden">
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Custom League Name</label>
+                            <input type="text" id="custom-league-name" placeholder="Enter League Name" class="w-full p-2.5 border rounded bg-white font-medium focus:outline-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Match ID</label>
+                            <input type="text" id="custom-match-id" placeholder="Match ID (e.g. M001)" class="w-full p-2.5 border rounded focus:outline-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Match Time</label>
+                            <input type="datetime-local" id="match-time" class="w-full p-2.5 border rounded focus:outline-blue-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <input type="text" id="team-a" placeholder="Home Team (e.g. Georgia)" class="p-2.5 border rounded focus:outline-blue-500">
+                        <input type="text" id="team-b" placeholder="Away Team (e.g. N Ireland)" class="p-2.5 border rounded focus:outline-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Body Odds</label>
+                            <select id="body-odds" class="w-full p-2.5 border rounded bg-white focus:outline-blue-500"></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1 text-gray-700">Goal Odds</label>
+                            <select id="goal-odds" class="w-full p-2.5 border rounded bg-white focus:outline-blue-500"></select>
+                        </div>
+                    </div>
+                    <button onclick="addMatch()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-semibold cursor-pointer transition-colors">Add Match</button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                        <h3 class="font-bold text-lg">Matches Schedule</h3>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-4 mb-4 items-center bg-gray-50 p-3 rounded border">
+                        <div class="flex-1 w-full">
+                            <label class="text-xs font-bold text-gray-500 mb-1 block">Search Match</label>
+                            <input type="text" id="search-match" onkeyup="filterMatches()" placeholder="Search by Team or Match ID..." class="w-full p-2 border rounded text-sm focus:outline-blue-500 bg-white">
+                        </div>
+                        <div class="flex-1 w-full">
+                            <label class="text-xs font-bold text-gray-500 mb-1 block">Filter by League</label>
+                            <select id="filter-league-search" onchange="filterMatches()" class="w-full p-2 border rounded text-sm bg-white focus:outline-blue-500">
+                                <option value="ALL">All Leagues</option>
+                                <option value="ENGLISH PREMIER LEAGUE">English Premier League</option>
+                                <option value="SPANISH LA LIGA">Spanish La Liga</option>
+                                <option value="ITALIAN SERIE A">Italian Serie A</option>
+                                <option value="GERMAN BUNDESLIGA">German Bundesliga</option>
+                                <option value="UEFA CHAMPIONS LEAGUE">UEFA Champions League</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">No.</th>
+                                    <th class="border p-2.5">League</th>
+                                    <th class="border p-2.5">Match ID</th>
+                                    <th class="border p-2.5">Match Name</th>
+                                    <th class="border p-2.5">Body/Goal Odds</th>
+                                    <th class="border p-2.5">Match Time</th>
+                                    <th class="border p-2.5">Status</th>
+                                    <th class="border p-2.5">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="match-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 3: MATCH RESULTS -->
+            <div id="page-results" class="space-y-6 hidden">
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <h3 class="font-bold text-lg mb-4 text-blue-600">Match Results & Settlement Management</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">No.</th>
+                                    <th class="border p-2.5">League</th>
+                                    <th class="border p-2.5">Match ID</th>
+                                    <th class="border p-2.5">Match Name</th>
+                                    <th class="border p-2.5">Final Score</th>
+                                    <th class="border p-2.5">Status</th>
+                                    <th class="border p-2.5">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="result-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 4: TRANSACTIONS (ငွေသွင်း/ငွေထုတ် စာရင်းများ) -->
+            <div id="page-transactions" class="space-y-6 hidden">
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <h3 class="font-bold text-lg mb-4 text-yellow-600">Deposit & Withdraw Requests</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">No.</th>
+                                    <th class="border p-2.5">Username</th>
+                                    <th class="border p-2.5">Type</th>
+                                    <th class="border p-2.5">Method</th>
+                                    <th class="border p-2.5">Amount</th>
+                                    <th class="border p-2.5">Account / Phone / TxID</th>
+                                    <th class="border p-2.5">Status</th>
+                                    <th class="border p-2.5">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transaction-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 5: BETS -->
+            <div id="page-bets" class="space-y-6 hidden">
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <h3 class="font-bold text-lg mb-4">Users Betting Records</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">No.</th>
+                                    <th class="border p-2.5">Username</th>
+                                    <th class="border p-2.5">Match ID</th>
+                                    <th class="border p-2.5">Match Name</th>
+                                    <th class="border p-2.5">Type</th>
+                                    <th class="border p-2.5">Choice</th>
+                                    <th class="border p-2.5">Amount</th>
+                                    <th class="border p-2.5">Status</th>
+                                    <th class="border p-2.5 text-red-600">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bets-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 6: RISK MANAGEMENT -->
+            <div id="page-risk" class="space-y-6 hidden">
+                <div class="bg-white rounded-lg shadow-sm p-5 border">
+                    <h3 class="font-bold text-lg mb-2 text-rose-600">Bet Summary & Risk Management</h3>
+                    <p class="text-sm text-gray-500 mb-6">ပွဲစဉ်အလိုက် လောင်းကြေးများကြည့်ရှုရန်နှင့် စွန့်စားရမှုများပါက အပေါ်ဒိုင်သို့ လောင်းကြေးလွှဲတင်နိုင်ပါသည်။</p>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="border p-2.5">Match ID</th>
+                                    <th class="border p-2.5">Match Name</th>
+                                    <th class="border p-2.5">Total Pool Amount</th>
+                                    <th class="border p-2.5 bg-blue-50">Body Bets (Home vs Away)</th>
+                                    <th class="border p-2.5 bg-green-50">Goal Bets (Over vs Under)</th>
+                                    <th class="border p-2.5 text-center text-rose-600">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="risk-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MATCH RESULT MODAL -->
+    <div id="result-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-[#111827] text-white w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden border border-slate-800 font-sans">
+            <div class="flex justify-between items-center bg-[#0d131f] px-5 py-3 border-b border-slate-800">
+                <div class="flex items-center space-x-2 text-sky-400 font-bold tracking-wider text-sm md:text-base">
+                    <span>MATCH RESULT</span>
+                </div>
+                <span class="text-xs bg-slate-800/80 text-slate-300 font-semibold px-3 py-1 rounded border border-slate-700 uppercase tracking-wider">RESULT ENTRY</span>
+            </div>
+
+            <div class="p-6 space-y-5 bg-[#111827]">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-semibold text-slate-400">Select Match</label>
+                    <select id="modal-match-select" onchange="onModalMatchSelectChange()" class="w-full bg-[#182234] text-white border border-sky-500/40 rounded px-3 py-2 text-sm focus:outline-none">
+                    </select>
+                </div>
+
+                <div class="bg-[#182234] border border-slate-800 rounded-md p-5 space-y-4">
+                    <div class="flex justify-between items-center text-xs font-semibold text-slate-400 border-b border-slate-700/50 pb-3">
+                        <span id="modal-league-display" class="text-slate-300 font-bold uppercase tracking-wide">OTHER</span>
+                        <span id="modal-status-badge" class="bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded text-[11px] font-bold uppercase border border-slate-700">NOT STARTED</span>
+                    </div>
+
+                    <div class="flex justify-between items-center py-2 px-2">
+                        <div class="flex flex-col items-center space-y-1.5 w-5/12">
+                            <span id="modal-home-name" class="text-sky-400 font-bold text-lg text-center truncate w-full">Georgia</span>
+                        </div>
+                        <div class="bg-[#0b101a] border border-slate-700 px-3 py-1 rounded text-sky-400 font-extrabold text-sm">VS</div>
+                        <div class="flex flex-col items-center space-y-1.5 w-5/12">
+                            <span id="modal-away-name" class="text-white font-bold text-lg text-center truncate w-full">N Ireland</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center space-y-3 pt-2">
+                    <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Goal Score</div>
+                    <div class="flex justify-center items-center space-x-4">
+                        <input type="number" id="home-score" min="0" placeholder="0" class="w-16 h-16 bg-[#080d16] border border-slate-700 text-center text-2xl font-bold rounded text-white focus:outline-none">
+                        <span class="text-2xl font-bold text-slate-500">-</span>
+                        <input type="number" id="away-score" min="0" placeholder="0" class="w-16 h-16 bg-[#080d16] border border-slate-700 text-center text-2xl font-bold rounded text-white focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#0d131f] px-6 py-4 flex justify-end space-x-3 border-t border-slate-800">
+                <button onclick="saveMatchResult()" class="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-5 py-2 rounded text-sm cursor-pointer">Save Result</button>
+                <button onclick="closeResultModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-5 py-2 rounded text-sm cursor-pointer">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT ODDS MODAL -->
+    <div id="edit-odds-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-[#111827] text-white w-full max-w-lg rounded-lg shadow-2xl overflow-hidden border border-slate-800 font-sans">
+            <div class="flex justify-between items-center bg-[#0d131f] px-5 py-3 border-b border-slate-800">
+                <div class="text-sky-400 font-bold tracking-wider text-sm">EDIT MATCH ODDS</div>
+                <button onclick="closeEditOddsModal()" class="text-slate-400 hover:text-white font-bold cursor-pointer">✕</button>
+            </div>
+            <div class="p-6 space-y-4 bg-[#111827]">
+                <input type="hidden" id="edit-match-db-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Match Name</label>
+                    <input type="text" id="edit-match-name" readonly class="w-full bg-[#182234] text-slate-300 border border-slate-700 rounded p-2.5 text-sm focus:outline-none">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Body Odds</label>
+                        <select id="edit-body-odds" class="w-full bg-[#182234] text-white border border-slate-700 rounded p-2.5 text-sm focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Goal Odds</label>
+                        <select id="edit-goal-odds" class="w-full bg-[#182234] text-white border border-slate-700 rounded p-2.5 text-sm focus:outline-none"></select>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-[#0d131f] px-6 py-4 flex justify-end space-x-3 border-t border-slate-800">
+                <button onclick="closeEditOddsModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded text-sm font-semibold cursor-pointer">Cancel</button>
+                <button onclick="saveMatchOdds()" class="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2 rounded text-sm font-semibold cursor-pointer">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORWARD RISK MODAL -->
+    <div id="forward-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden border">
+            <div class="bg-rose-600 px-5 py-3 text-white font-bold flex justify-between">
+                <span>Transfer Risk to Master Agent</span>
+                <span id="forward-match-id" class="text-rose-200 text-sm"></span>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Select Choice</label>
+                    <select id="forward-choice" class="w-full p-2.5 border rounded bg-gray-50"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Enter Amount (MMK)</label>
+                    <input type="number" id="forward-amount" placeholder="e.g. 50000" class="w-full p-2.5 border rounded">
+                </div>
+            </div>
+            <div class="bg-gray-100 px-5 py-4 flex justify-end space-x-2 border-t">
+                <button onclick="closeForwardModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm font-semibold cursor-pointer">Cancel</button>
+                <button onclick="submitForwardRisk()" class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded text-sm font-semibold cursor-pointer">Confirm Transfer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentActiveMatchId = null;
+        let forwardMatchData = {};
+        let allMatches = [];
+        let riskMatchesData = [];
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+            sidebar.classList.toggle('absolute');
+            sidebar.classList.toggle('z-40');
+            sidebar.classList.toggle('h-full');
+        }
+
+        function switchPage(page) {
+            ['users', 'matches', 'results', 'transactions', 'bets', 'risk'].forEach(p => {
+                const pageEl = document.getElementById(`page-${p}`);
+                const navEl = document.getElementById(`nav-${p}`);
+                if (pageEl) pageEl.classList.add('hidden');
+                if (navEl) {
+                    if (p === 'risk') navEl.className = "w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-rose-400";
+                    else if (p === 'transactions') navEl.className = "w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-yellow-400";
+                    else navEl.className = "w-full text-left px-4 py-2.5 rounded hover:bg-slate-800 text-slate-300";
+                }
+            });
+
+            const activePage = document.getElementById(`page-${page}`);
+            const activeNav = document.getElementById(`nav-${page}`);
+            
+            if (activePage) activePage.classList.remove('hidden');
+            if (activeNav) {
+                if (page === 'risk') activeNav.className = "w-full text-left px-4 py-2.5 rounded bg-rose-600 text-white font-semibold";
+                else if (page === 'transactions') activeNav.className = "w-full text-left px-4 py-2.5 rounded bg-yellow-600 text-white font-semibold";
+                else activeNav.className = "w-full text-left px-4 py-2.5 rounded bg-blue-600 text-white font-semibold";
+            }
+            
+            const titles = { 
+                users: 'User Management', 
+                matches: 'Match Management', 
+                results: 'Match Results', 
+                transactions: 'Deposit & Withdraw Transactions',
+                bets: 'Betting Records', 
+                risk: 'Risk Management & Bet Summary' 
+            };
+            document.getElementById('page-title').innerText = titles[page] || 'Admin Dashboard';
+
+            if(page === 'users') loadUsers();
+            else if(page === 'matches') loadMatches();
+            else if(page === 'results') loadResults();
+            else if(page === 'transactions') loadTransactions();
+            else if(page === 'bets') loadBets();
+            else if(page === 'risk') loadRiskData();
+        }
+
+        function adminLogout() { window.location.href = '/index.html'; }
+        function pad(n) { return n < 10 ? '0' + n : n; }
+        
+        function handleLeagueChange() {
+            const leagueSelect = document.getElementById('match-league').value;
+            const customBox = document.getElementById('custom-league-box');
+            customBox.classList.toggle('hidden', leagueSelect !== 'OTHER');
+        }
+
+        function populateOddsDropdowns() {
+            const bodySelect = document.getElementById('body-odds');
+            const goalSelect = document.getElementById('goal-odds');
+            if(!bodySelect || !goalSelect) return;
+            
+            let bodyHtml = '<option value="0=">0= (Level Ball)</option>';
+            for (let i = 5; i <= 95; i += 5) bodyHtml += `<option value="0-${pad(i)}">0-${pad(i)}</option>`;
+            bodyHtml += `<option value="0-100">0-100</option>`;
+            for (let goal = 1; goal <= 6; goal++) {
+                bodyHtml += `<option value="${goal}=">${goal}=</option>`;
+                for (let i = 5; i <= 95; i += 5) { 
+                    bodyHtml += `<option value="${goal}+${pad(i)}">${goal}+${pad(i)}</option><option value="${goal}-${pad(i)}">${goal}-${pad(i)}</option>`; 
+                }
+            }
+            bodySelect.innerHTML = bodyHtml;
+
+            let goalHtml = '';
+            for (let goal = 2; goal <= 7; goal++) {
+                goalHtml += `<option value="${goal}=">${goal}=</option>`;
+                for (let i = 5; i <= 95; i += 5) { 
+                    goalHtml += `<option value="${goal}+${pad(i)}">${goal}+${pad(i)}</option><option value="${goal}-${pad(i)}">${goal}-${pad(i)}</option>`; 
+                }
+            }
+            goalSelect.innerHTML = goalHtml;
+        }
+
+        function generateEditOddsDropdowns() {
+            const bodySelect = document.getElementById('edit-body-odds');
+            const goalSelect = document.getElementById('edit-goal-odds');
+            if(!bodySelect || !goalSelect) return;
+            
+            let bodyHtml = '<option value="0=">0= (Level Ball)</option>';
+            for (let i = 5; i <= 95; i += 5) bodyHtml += `<option value="0-${pad(i)}">0-${pad(i)}</option>`;
+            bodyHtml += `<option value="0-100">0-100</option>`;
+            for (let goal = 1; goal <= 6; goal++) {
+                bodyHtml += `<option value="${goal}=">${goal}=</option>`;
+                for (let i = 5; i <= 95; i += 5) { 
+                    bodyHtml += `<option value="${goal}+${pad(i)}">${goal}+${pad(i)}</option><option value="${goal}-${pad(i)}">${goal}-${pad(i)}</option>`; 
+                }
+            }
+            bodySelect.innerHTML = bodyHtml;
+
+            let goalHtml = '';
+            for (let goal = 2; goal <= 7; goal++) {
+                goalHtml += `<option value="${goal}=">${goal}=</option>`;
+                for (let i = 5; i <= 95; i += 5) { 
+                    goalHtml += `<option value="${goal}+${pad(i)}">${goal}+${pad(i)}</option><option value="${goal}-${pad(i)}">${goal}-${pad(i)}</option>`; 
+                }
+            }
+            goalSelect.innerHTML = goalHtml;
+        }
+
+        // ================= USERS ================= //
+        function createUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value.trim();
+            const balance = parseFloat(document.getElementById('new-balance').value) || 0;
+            if (!username || !password) return alert('Username နှင့် Password ဖြည့်ပါ။');
+
+            fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, balance })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || 'Success');
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('new-balance').value = '';
+                loadUsers();
+            });
+        }
+
+        function loadUsers() {
+            fetch('/api/users')
+            .then(res => res.json())
+            .then(result => {
+                const users = result.data || result || [];
+                const tbody = document.getElementById('user-list');
+                tbody.innerHTML = '';
+                if(!users.length) return tbody.innerHTML = `<tr><td colspan="4" class="border p-4 text-center">No users</td></tr>`;
+                users.forEach((u, i) => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="border p-2.5 text-center">${i+1}</td>
+                            <td class="border p-2.5 text-center font-semibold">${u.username}</td>
+                            <td class="border p-2.5 text-center text-green-600 font-bold">${(u.balance || 0).toLocaleString()} MMK</td>
+                            <td class="border p-2.5 text-center">
+                                <button onclick="addBalance('${u.username}')" class="bg-blue-600 text-white px-3 py-1 rounded text-xs cursor-pointer">Add Balance</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function addBalance(username) {
+            const amount = prompt(`ထည့်မည့်ပမာဏ (MMK):`);
+            if (!amount || isNaN(amount)) return;
+            fetch('/api/users/add-balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, amount: parseFloat(amount) })
+            }).then(() => loadUsers());
+        }
+
+        // ================= MATCHES ================= //
+        function addMatch() {
+            const leagueSelect = document.getElementById('match-league').value;
+            const league = leagueSelect === 'OTHER' ? document.getElementById('custom-league-name').value : leagueSelect;
+            const custom_match_id = document.getElementById('custom-match-id').value.trim();
+            const match_time = document.getElementById('match-time').value;
+            const teamA = document.getElementById('team-a').value.trim();
+            const teamB = document.getElementById('team-b').value.trim();
+            const body_odds = document.getElementById('body-odds').value;
+            const goal_odds = document.getElementById('goal-odds').value;
+
+            if (!teamA || !teamB || !match_time) return alert('အချက်အလက်များ ဖြည့်ပါ');
+
+            fetch('/api/matches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ league, custom_match_id, match_name: `${teamA} vs ${teamB}`, body_odds, goal_odds, match_time })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || 'Success');
+                loadMatches();
+            });
+        }
+
+        function loadMatches() {
+            fetch('/api/matches')
+            .then(res => res.json())
+            .then(result => {
+                allMatches = result.data || result || [];
+                filterMatches();
+            });
+        }
+
+        function filterMatches() {
+            const query = document.getElementById('search-match').value.toLowerCase();
+            const selectedLeague = document.getElementById('filter-league-search').value;
+            const filtered = allMatches.filter(m => {
+                const matchesSearch = (m.match_name && m.match_name.toLowerCase().includes(query));
+                const matchesLeague = (selectedLeague === 'ALL' || m.league === selectedLeague);
+                return matchesSearch && matchesLeague;
+            });
+            renderMatchesTable(filtered);
+        }
+
+        function renderMatchesTable(matches) {
+            const tbody = document.getElementById('match-list');
+            tbody.innerHTML = '';
+            if(!matches.length) return tbody.innerHTML = `<tr><td colspan="8" class="border p-4 text-center">No matches</td></tr>`;
+            matches.forEach((m, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="border p-2.5 text-center">${idx + 1}</td>
+                        <td class="border p-2.5 text-center text-xs">${m.league}</td>
+                        <td class="border p-2.5 text-center font-bold">${m.custom_match_id || m.id}</td>
+                        <td class="border p-2.5 text-center">${m.match_name}</td>
+                        <td class="border p-2.5 text-center text-xs">B: ${m.body_odds} | G: ${m.goal_odds}</td>
+                        <td class="border p-2.5 text-center text-xs">${m.match_time}</td>
+                        <td class="border p-2.5 text-center"><span class="px-2 py-1 text-xs rounded ${m.status === 'Open' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${m.status}</span></td>
+                        <td class="border p-2.5 text-center space-x-1">
+                            <button onclick="openEditOddsModal(${m.id})" class="bg-sky-600 text-white px-2 py-1 rounded text-xs cursor-pointer">Edit Odds</button>
+                            <button onclick="toggleStatus(${m.id}, '${m.status === 'Open' ? 'Closed' : 'Open'})" class="bg-amber-500 text-white px-2 py-1 rounded text-xs cursor-pointer">Toggle</button>
+                            <button onclick="deleteMatch(${m.id})" class="bg-red-500 text-white px-2 py-1 rounded text-xs cursor-pointer">Delete</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function openEditOddsModal(id) {
+            const match = allMatches.find(m => m.id === id);
+            if (!match) return;
+            document.getElementById('edit-match-db-id').value = match.id;
+            document.getElementById('edit-match-name').value = match.match_name;
+            generateEditOddsDropdowns();
+            if(match.body_odds) document.getElementById('edit-body-odds').value = match.body_odds;
+            if(match.goal_odds) document.getElementById('edit-goal-odds').value = match.goal_odds;
+            document.getElementById('edit-odds-modal').classList.remove('hidden');
+        }
+
+        function closeEditOddsModal() { document.getElementById('edit-odds-modal').classList.add('hidden'); }
+
+        function saveMatchOdds() {
+            const id = document.getElementById('edit-match-db-id').value;
+            const body_odds = document.getElementById('edit-body-odds').value;
+            const goal_odds = document.getElementById('edit-goal-odds').value;
+            fetch(`/api/matches/${id}/odds`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body_odds, goal_odds })
+            }).then(() => { closeEditOddsModal(); loadMatches(); });
+        }
+
+        function toggleStatus(id, newStatus) {
+            fetch(`/api/matches/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            }).then(() => loadMatches());
+        }
+
+        function deleteMatch(id) {
+            if(!confirm('သေချာပါသလား?')) return;
+            fetch(`/api/matches/${id}`, { method: 'DELETE' }).then(() => loadMatches());
+        }
+
+        // ================= RESULTS ================= //
+        function loadResults() {
+            fetch('/api/matches')
+            .then(res => res.json())
+            .then(result => {
+                allMatches = result.data || result || [];
+                const tbody = document.getElementById('result-list');
+                tbody.innerHTML = '';
+                allMatches.forEach((m, idx) => {
+                    const score = (m.home_score !== null && m.away_score !== null) ? `${m.home_score} - ${m.away_score}` : 'Not Settled';
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="border p-2.5 text-center">${idx + 1}</td>
+                            <td class="border p-2.5 text-center text-xs">${m.league}</td>
+                            <td class="border p-2.5 text-center font-bold">${m.custom_match_id || m.id}</td>
+                            <td class="border p-2.5 text-center">${m.match_name}</td>
+                            <td class="border p-2.5 text-center font-bold text-emerald-600">${score}</td>
+                            <td class="border p-2.5 text-center">${m.status}</td>
+                            <td class="border p-2.5 text-center">
+                                <button onclick="openResultModalByIndex(${idx})" class="bg-sky-600 text-white px-3 py-1 rounded text-xs cursor-pointer">Enter Score</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function openResultModalByIndex(idx) {
+            const select = document.getElementById('modal-match-select');
+            select.innerHTML = '';
+            allMatches.forEach((m, i) => {
+                select.innerHTML += `<option value="${i}" ${i === idx ? 'selected' : ''}>${m.match_name}</option>`;
+            });
+            onModalMatchSelectChange();
+            document.getElementById('result-modal').classList.remove('hidden');
+        }
+
+        function onModalMatchSelectChange() {
+            const idx = parseInt(document.getElementById('modal-match-select').value);
+            const match = allMatches[idx];
+            if (!match) return;
+            currentActiveMatchId = match.custom_match_id || match.id;
+            const teams = (match.match_name || '').split(' vs ');
+            document.getElementById('modal-league-display').innerText = match.league;
+            document.getElementById('modal-status-badge').innerText = match.status;
+            document.getElementById('modal-home-name').innerText = teams[0] || '';
+            document.getElementById('modal-away-name').innerText = teams[1] || '';
+            document.getElementById('home-score').value = match.home_score ?? '';
+            document.getElementById('away-score').value = match.away_score ?? '';
+        }
+
+        function closeResultModal() { document.getElementById('result-modal').classList.add('hidden'); }
+
+        function saveMatchResult() {
+            const home_score = parseInt(document.getElementById('home-score').value);
+            const away_score = parseInt(document.getElementById('away-score').value);
+            if (isNaN(home_score) || isNaN(away_score)) return alert('ဂိုးရလဒ် ထည့်ပါ');
+
+            fetch('/api/matches/save-result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ match_id: currentActiveMatchId, home_score, away_score })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || 'Saved');
+                closeResultModal();
+                loadResults();
+            });
+        }
+
+        // ================= TRANSACTIONS (ငွေသွင်း/ထုတ် အတည်ပြုရန်) ================= //
+        function loadTransactions() {
+            fetch('/api/user/transactions')
+            .then(res => res.json())
+            .then(result => {
+                const list = result.data || result || [];
+                const tbody = document.getElementById('transaction-list');
+                tbody.innerHTML = '';
+                if(!list.length) return tbody.innerHTML = `<tr><td colspan="8" class="border p-4 text-center">No transactions</td></tr>`;
+
+                list.forEach((tx, i) => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="border p-2.5 text-center">${i+1}</td>
+                            <td class="border p-2.5 text-center font-semibold">${tx.username}</td>
+                            <td class="border p-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded font-bold ${tx.type === 'Deposit' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${tx.type}</span></td>
+                            <td class="border p-2.5 text-center">${tx.payment_method}</td>
+                            <td class="border p-2.5 text-center font-bold">${tx.amount.toLocaleString()} MMK</td>
+                            <td class="border p-2.5 text-center text-xs">${tx.account_name || '-'} / ${tx.phone || '-'} / ${tx.transaction_id || '-'}</td>
+                            <td class="border p-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded font-bold bg-gray-100">${tx.status}</span></td>
+                            <td class="border p-2.5 text-center">
+                                ${tx.status === 'Pending' ? `
+                                    <button onclick="actionTx(${tx.id}, 'Approved', '${tx.username}', ${tx.amount}, '${tx.type}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs cursor-pointer mr-1">Approve</button>
+                                    <button onclick="actionTx(${tx.id}, 'Rejected', '${tx.username}', ${tx.amount}, '${tx.type}')" class="bg-red-600 text-white px-2 py-1 rounded text-xs cursor-pointer">Reject</button>
+                                ` : tx.status}
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function actionTx(transaction_id, status, username, amount, type) {
+            fetch('/api/admin/transactions/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transaction_id, status, username, amount, type })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || 'Success');
+                loadTransactions();
+            });
+        }
+
+        // ================= BETS ================= //
+        function loadBets() {
+            fetch('/api/bets')
+            .then(res => res.json())
+            .then(result => {
+                const bets = result.data || result || [];
+                const tbody = document.getElementById('bets-list');
+                tbody.innerHTML = '';
+                if(!bets.length) return tbody.innerHTML = `<tr><td colspan="9" class="border p-4 text-center">No bets</td></tr>`;
+                bets.forEach((b, i) => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="border p-2.5 text-center">${i+1}</td>
+                            <td class="border p-2.5 text-center">${b.username}</td>
+                            <td class="border p-2.5 text-center">${b.match_id}</td>
+                            <td class="border p-2.5 text-center">${b.match_name}</td>
+                            <td class="border p-2.5 text-center">${b.bet_type}</td>
+                            <td class="border p-2.5 text-center">${b.choice}</td>
+                            <td class="border p-2.5 text-center">${b.amount.toLocaleString()} MMK</td>
+                            <td class="border p-2.5 text-center font-bold">${b.status}</td>
+                            <td class="border p-2.5 text-center">
+                                <button onclick="deleteBet(${b.id})" class="bg-red-500 text-white px-2 py-1 rounded text-xs cursor-pointer">Delete</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function deleteBet(id) {
+            if(!confirm('သေချာပါသလား?')) return;
+            fetch(`/api/bets/${id}`, { method: 'DELETE' }).then(() => loadBets());
+        }
+
+        // ================= RISK ================= //
+        function loadRiskData() {
+            Promise.all([
+                fetch('/api/matches').then(res => res.json()).catch(() => ({ data: [] })),
+                fetch('/api/bets').then(res => res.json()).catch(() => ({ data: [] }))
+            ]).then(([matchesRes, betsRes]) => {
+                const matches = matchesRes.data || matchesRes || [];
+                const bets = betsRes.data || betsRes || [];
+                riskMatchesData = matches;
+                const tbody = document.getElementById('risk-list');
+                tbody.innerHTML = '';
+                matches.forEach((m, idx) => {
+                    const matchBets = bets.filter(b => b.match_id === m.custom_match_id || b.match_id === m.id);
+                    let homeAmt = 0, awayAmt = 0;
+                    const teams = (m.match_name || '').split(' vs ');
+                    matchBets.forEach(b => {
+                        if(b.choice === teams[0]?.trim()) homeAmt += b.amount;
+                        if(b.choice === teams[1]?.trim()) awayAmt += b.amount;
+                    });
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="border p-2.5 text-center font-bold">${m.custom_match_id || m.id}</td>
+                            <td class="border p-2.5 text-center">${m.match_name}</td>
+                            <td class="border p-2.5 text-center text-rose-600 font-bold">${(homeAmt + awayAmt).toLocaleString()} MMK</td>
+                            <td class="border p-2.5 text-center">${teams[0] || 'Home'}: ${homeAmt.toLocaleString()}</td>
+                            <td class="border p-2.5 text-center">${teams[1] || 'Away'}: ${awayAmt.toLocaleString()}</td>
+                            <td class="border p-2.5 text-center">
+                                <button onclick="openForwardModalByIndex(${idx})" class="bg-rose-600 text-white px-3 py-1 rounded text-xs cursor-pointer">Transfer</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function openForwardModalByIndex(idx) {
+            const m = riskMatchesData[idx];
+            if (!m) return;
+            const teams = (m.match_name || '').split(' vs ');
+            const matchId = m.custom_match_id || m.id;
+            forwardMatchData = { matchId };
+            document.getElementById('forward-match-id').innerText = matchId;
+            document.getElementById('forward-choice').innerHTML = `
+                <option value="${teams[0]?.trim()}">${teams[0]?.trim()}</option>
+                <option value="${teams[1]?.trim()}">${teams[1]?.trim()}</option>
+                <option value="Over">Over</option>
+                <option value="Under">Under</option>
+            `;
+            document.getElementById('forward-amount').value = '';
+            document.getElementById('forward-modal').classList.remove('hidden');
+        }
+
+        function closeForwardModal() { document.getElementById('forward-modal').classList.add('hidden'); }
+
+        function submitForwardRisk() {
+            const choice = document.getElementById('forward-choice').value;
+            const amount = parseFloat(document.getElementById('forward-amount').value);
+            if(!amount || amount <= 0) return alert('ပမာဏထည့်ပါ');
+
+            fetch('/api/admin/forward-risk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ match_id: forwardMatchData.matchId, choice, amount })
+            }).then(() => { closeForwardModal(); loadRiskData(); });
+        }
+
+        populateOddsDropdowns();
+        loadUsers();
+    </script>
+</body>
+</html>
