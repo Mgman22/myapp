@@ -267,7 +267,6 @@ app.post('/api/login', (req, res) => {
             if (err || !match) {
                 return res.status(400).json({ success: false, message: 'Invalid username or password' });
             }
-            // Password match ဖြစ်ပါက password field ကို ဖယ်ထုတ်ပြီး ပြန်ပို့မည်
             const { password: _, ...userInfo } = row;
             res.json({ success: true, user: userInfo });
         });
@@ -449,7 +448,7 @@ app.post(['/api/matches/save-result', '/api/admin/update-result'], (req, res) =>
     });
 });
 
-// ================= BETTING APIs (WITH TRANSACTION SAFETY) ================= //
+// ================= BETTING APIs (WITH SAFEGUARDS & TRANSACTION SAFETY) ================= //
 app.get(['/api/bets', '/api/admin/bets'], (req, res) => {
     const { username } = req.query;
     let query = `SELECT * FROM bets`;
@@ -513,8 +512,10 @@ app.post('/api/user/place-bet', (req, res) => {
         return res.status(400).json({ success: false, message: 'ငွေပမာဏ မမှန်ကန်ပါ။' });
     }
 
+    // Safeguard check to prevent 500 server crash if user is missing from railway database
     db.get(`SELECT balance FROM users WHERE username = ?`, [username], (err, user) => {
-        if (err || !user) return res.status(400).json({ success: false, message: 'User not found' });
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (!user) return res.status(400).json({ success: false, message: 'အသုံးပြုသူ အကောင့်ကို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Login ပြန်ဝင်ပါ။' });
         if (user.balance < totalDeduction) return res.status(400).json({ success: false, message: 'လက်ကျန်ငွေ မလုံလောက်ပါ။' });
 
         db.serialize(() => {
