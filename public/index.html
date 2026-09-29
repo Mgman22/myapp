@@ -661,13 +661,13 @@
                                         <div class="small fw-bold text-secondary mb-1">ဘော်ဒီ (Body Odds: ${m.body_odds || '0='})</div>
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" onclick="openBetModal('${m.custom_match_id || m.id}', '${m.match_name}', 'Body', '${homeTeam}', '${m.body_odds}')">
+                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" data-match-id="${encodeURIComponent(m.custom_match_id || m.id)}" data-match-name="${encodeURIComponent(m.match_name || '')}" data-bet-type="Body" data-choice="${encodeURIComponent(homeTeam)}" data-odds="${encodeURIComponent(m.body_odds || '')}" onclick="openBetFromButton(this)">
                                                     <span class="odds-title text-danger">${homeTeam}</span>
                                                     <span class="odds-val text-primary">Body</span>
                                                 </div>
                                             </div>
                                             <div class="col-6">
-                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" onclick="openBetModal('${m.custom_match_id || m.id}', '${m.match_name}', 'Body', '${awayTeam}', '${m.body_odds}')">
+                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" data-match-id="${encodeURIComponent(m.custom_match_id || m.id)}" data-match-name="${encodeURIComponent(m.match_name || '')}" data-bet-type="Body" data-choice="${encodeURIComponent(awayTeam)}" data-odds="${encodeURIComponent(m.body_odds || '')}" onclick="openBetFromButton(this)">
                                                     <span class="odds-title text-dark">${awayTeam}</span>
                                                     <span class="odds-val text-primary">Body</span>
                                                 </div>
@@ -680,13 +680,13 @@
                                         <div class="small fw-bold text-secondary mb-1">ဂိုးပေါင်း (Goal Odds: ${m.goal_odds || '0='})</div>
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" onclick="openBetModal('${m.custom_match_id || m.id}', '${m.match_name}', 'Goal', 'Over', '${m.goal_odds}')">
+                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" data-match-id="${encodeURIComponent(m.custom_match_id || m.id)}" data-match-name="${encodeURIComponent(m.match_name || '')}" data-bet-type="Goal" data-choice="Over" data-odds="${encodeURIComponent(m.goal_odds || '')}" onclick="openBetFromButton(this)">
                                                     <span class="odds-title text-danger">Over (ဂိုးပေါ်)</span>
                                                     <span class="odds-val text-primary">Over</span>
                                                 </div>
                                             </div>
                                             <div class="col-6">
-                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" onclick="openBetModal('${m.custom_match_id || m.id}', '${m.match_name}', 'Goal', 'Under', '${m.goal_odds}')">
+                                                <div class="odds-btn ${isClosed ? 'disabled' : ''}" data-match-id="${encodeURIComponent(m.custom_match_id || m.id)}" data-match-name="${encodeURIComponent(m.match_name || '')}" data-bet-type="Goal" data-choice="Under" data-odds="${encodeURIComponent(m.goal_odds || '')}" onclick="openBetFromButton(this)">
                                                     <span class="odds-title text-dark">Under (ဂိုးအောက်)</span>
                                                     <span class="odds-val text-primary">Under</span>
                                                 </div>
@@ -706,6 +706,17 @@
                     container.innerHTML = `<div class="text-center py-5 text-danger">ပွဲစဉ်များ ရယူရာတွင် အမှားအယွင်းရှိနေပါသည်။</div>`;
                 }
             }
+        }
+
+        function openBetFromButton(el) {
+            if (el.classList.contains('disabled')) return;
+            openBetModal(
+                decodeURIComponent(el.dataset.matchId || ''),
+                decodeURIComponent(el.dataset.matchName || ''),
+                el.dataset.betType || '',
+                decodeURIComponent(el.dataset.choice || ''),
+                decodeURIComponent(el.dataset.odds || '')
+            );
         }
 
         function openBetModal(matchId, matchName, betType, choice, oddsRate) {
@@ -742,11 +753,25 @@
 
         async function handlePlaceBet(e) {
             e.preventDefault();
-            const amount = Number(document.getElementById('betAmount').value);
+            if (!currentUser) {
+                alert('ဦးစွာ Login ဝင်ပါ။');
+                return;
+            }
 
-            if (amount > currentUser.balance) {
+            const amount = Number(document.getElementById('betAmount').value);
+            if (!Number.isFinite(amount) || amount < 100) {
+                alert('အနည်းဆုံး 100 Kyats ထည့်ပါ။');
+                return;
+            }
+            if (amount > Number(currentUser.balance || 0)) {
                 alert('လက်ကျန်ငွေ မလုံလောက်ပါ။');
                 return;
+            }
+
+            const submitBtn = document.querySelector('#betForm button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = 'တင်နေပါသည်...';
             }
 
             const payload = {
@@ -765,21 +790,29 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                const result = await res.json();
+                const result = await res.json().catch(() => ({ success: false, message: 'Server response မမှန်ကန်ပါ။' }));
 
                 if (result.success) {
                     alert('လောင်းကြေး အောင်မြင်စွာ တင်ပြီးပါပြီ။');
-                    currentUser.balance -= amount;
+                    if (result.balance !== undefined) currentUser.balance = Number(result.balance);
+                    else currentUser.balance -= amount;
                     localStorage.setItem('currentUser', JSON.stringify(currentUser));
                     updateUserUI();
                     placeBetModalInstance.hide();
                     loadBetHistory(true);
                     loadTransactionStatement(true);
                 } else {
-                    alert(result.message || 'လောင်းကြေး တင်၍မရပါ။');
+                    alert(result.message || result.error || 'လောင်းကြေး တင်၍မရပါ။');
+                    await refreshUserBalance();
                 }
             } catch (err) {
-                alert('Server အမှားအယွင်း ရှိနေပါသည်။');
+                console.error('Place bet error:', err);
+                alert('Server ချိတ်ဆက်မှု အဆင်မပြေပါ။ Railway Logs ကို စစ်ဆေးပါ။');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = 'အတည်ပြုမည်';
+                }
             }
         }
 
