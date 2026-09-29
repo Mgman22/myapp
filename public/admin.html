@@ -490,19 +490,26 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password, balance })
             })
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            })
             .then(data => {
                 alert(data.message || 'Success');
                 document.getElementById('new-username').value = '';
                 document.getElementById('new-password').value = '';
                 document.getElementById('new-balance').value = '';
                 loadUsers();
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function loadUsers() {
             fetch('/api/users')
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : { data: [] };
+            })
             .then(result => {
                 const users = result.data || result || [];
                 const tbody = document.getElementById('user-list');
@@ -519,7 +526,8 @@
                             </td>
                         </tr>`;
                 });
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function addBalance(username) {
@@ -550,20 +558,28 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ league, custom_match_id, match_name: `${teamA} vs ${teamB}`, body_odds, goal_odds, match_time })
             })
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            })
             .then(data => {
                 alert(data.message || 'Success');
                 loadMatches();
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function loadMatches() {
             fetch('/api/matches')
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : { data: [] };
+            })
             .then(result => {
                 allMatches = result.data || result || [];
                 filterMatches();
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function filterMatches() {
@@ -640,7 +656,10 @@
         // ================= RESULTS ================= //
         function loadResults() {
             fetch('/api/matches')
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : { data: [] };
+            })
             .then(result => {
                 allMatches = result.data || result || [];
                 const tbody = document.getElementById('result-list');
@@ -660,7 +679,8 @@
                             </td>
                         </tr>`;
                 });
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function openResultModalByIndex(idx) {
@@ -699,18 +719,26 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ match_id: currentActiveMatchId, home_score, away_score })
             })
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            })
             .then(data => {
                 alert(data.message || 'Saved');
                 closeResultModal();
                 loadResults();
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         // ================= TRANSACTIONS ================= //
         function loadTransactions() {
-            fetch('/api/user/transactions')
-            .then(res => res.json())
+            // Updated to match correct server route: /api/admin/transactions
+            fetch('/api/admin/transactions')
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : { data: [] };
+            })
             .then(result => {
                 const list = result.data || result || [];
                 const tbody = document.getElementById('transaction-list');
@@ -735,7 +763,8 @@
                             </td>
                         </tr>`;
                 });
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function actionTx(transaction_id, status, username, amount, type) {
@@ -744,17 +773,24 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transaction_id, status, username, amount, type })
             })
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            })
             .then(data => {
                 alert(data.message || 'Success');
                 loadTransactions();
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         // ================= BETS ================= //
         function loadBets() {
             fetch('/api/bets')
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                return text ? JSON.parse(text) : { data: [] };
+            })
             .then(result => {
                 const bets = result.data || result || [];
                 const tbody = document.getElementById('bets-list');
@@ -776,7 +812,8 @@
                             </td>
                         </tr>`;
                 });
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
 
         function deleteBet(id) {
@@ -787,8 +824,8 @@
         // ================= RISK ================= //
         function loadRiskData() {
             Promise.all([
-                fetch('/api/matches').then(res => res.json()).catch(() => ({ data: [] })),
-                fetch('/api/bets').then(res => res.json()).catch(() => ({ data: [] }))
+                fetch('/api/matches').then(async res => { const t = await res.text(); return t ? JSON.parse(t) : { data: [] }; }).catch(() => ({ data: [] })),
+                fetch('/api/bets').then(async res => { const t = await res.text(); return t ? JSON.parse(t) : { data: [] }; }).catch(() => ({ data: [] }))
             ]).then(([matchesRes, betsRes]) => {
                 const matches = matchesRes.data || matchesRes || [];
                 const bets = betsRes.data || betsRes || [];

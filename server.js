@@ -2,6 +2,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,10 +13,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database Connection
+// Database Connection & WAL Mode for Concurrency Safety
 const db = new sqlite3.Database('./betting.db', (err) => {
-    if (err) console.error('Database opening error: ', err.message);
-    else console.log('Connected to SQLite Database (betting.db).');
+    if (err) {
+        console.error('Database opening error: ', err.message);
+    } else {
+        console.log('Connected to SQLite Database (betting.db).');
+        db.run('PRAGMA journal_mode = WAL;');
+        db.run('PRAGMA foreign_keys = ON;');
+    }
 });
 
 // Mobile / Safari / Server Timezone Safe Date Parser
@@ -92,8 +98,9 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Default Admin Account
-    db.run(`INSERT OR IGNORE INTO users (username, password, balance, role) VALUES ('admin', 'admin123', 0, 'admin')`);
+    // Default Admin Account (Password: admin123)
+    const defaultAdminPass = bcrypt.hashSync('admin123', 10);
+    db.run(`INSERT OR IGNORE INTO users (username, password, balance, role) VALUES ('admin', ?, 0, 'admin')`, [defaultAdminPass]);
 
     // Auto-fix: ပွဲချိန်မရောက်သေးသော ပွဲများကို Status: Open သို့ ပြန်ပြောင်းပေးခြင်း
     const nowMs = Date.now();
@@ -106,7 +113,7 @@ db.serialize(() => {
 
             if (reopenIds.length > 0) {
                 const placeholders = reopenIds.map(() => '?').join(',');
-                db.run(`UPDATE matches SET status = 'Open' WHERE id IN (${placeholders})`);
+                db.run(`UPDATE matches SET status = 'Open' WHERE id IN (${placeholders})`, reopenIds);
             }
         }
     });
@@ -248,10 +255,22 @@ function calculateBetOutcome(betType, choice, oddsStr, homeScore, awayScore, mat
 // ================= AUTH APIs ================= //
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    db.get(`SELECT * FROM users WHERE username = ? AND password = ?`, [username, password], (err, row) => {
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Username နှင့် Password ထည့်သွင်းပါ။' });
+    }
+
+    db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(400).json({ success: false, message: 'Invalid username or password' });
-        res.json({ success: true, user: row });
+
+        bcrypt.compare(password, row.password, (err, match) => {
+            if (err || !match) {
+                return res.status(400).json({ success: false, message: 'Invalid username or password' });
+            }
+            // Password match ဖြစ်ပါက password field ကို ဖယ်ထုတ်ပြီး ပြန်ပို့မည်
+            const { password: _, ...userInfo } = row;
+            res.json({ success: true, user: userInfo });
+        });
     });
 });
 
@@ -273,10 +292,15 @@ app.get(['/api/users', '/api/admin/users'], (req, res) => {
 
 app.post(['/api/users', '/api/admin/create-user'], (req, res) => {
     const { username, password, balance, initial_balance } = req.body;
-    const initialBal = balance !== undefined ? balance : (initial_balance || 0);
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Username နှင့် Password လိုအပ်ပါသည်။' });
+    }
+    const initialBal = balance !== undefined ? Number(balance) : (Number(initial_balance) || 0);
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
 
     db.run(`INSERT INTO users (username, password, balance, role) VALUES (?, ?, ?, 'user')`, 
-        [username, password, initialBal], function(err) {
+        [username, hashedPassword, initialBal], function(err) {
         if (err) return res.status(400).json({ success: false, message: 'Username ဖြင့် အကောင့်ရှိပြီးသားဖြစ်ပါသည် သို့မဟုတ် အချက်အလက်မှားယွင်းနေပါသည်။' });
         res.json({ success: true, message: 'User account created successfully', userId: this.lastID });
     });
@@ -284,7 +308,10 @@ app.post(['/api/users', '/api/admin/create-user'], (req, res) => {
 
 app.post(['/api/users/add-balance', '/api/admin/update-balance'], (req, res) => {
     const { username, amount } = req.body;
-    db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amount, username], function(err) {
+    const amt = Number(amount);
+    if (isNaN(amt)) return res.status(400).json({ success: false, message: 'ငွေပမာဏ မမှန်ကန်ပါ။' });
+
+    db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amt, username], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, message: 'Balance updated successfully' });
     });
@@ -325,7 +352,6 @@ app.patch('/api/matches/:id/status', (req, res) => {
     });
 });
 
-// Edit Match Odds API
 app.patch('/api/matches/:id/odds', (req, res) => {
     const matchId = req.params.id;
     const { body_odds, goal_odds } = req.body;
@@ -354,47 +380,68 @@ app.delete(['/api/matches/:id', '/api/admin/delete-match'], (req, res) => {
     });
 });
 
-// ================= MATCH SETTLEMENT API ================= //
+// ================= MATCH SETTLEMENT API (WITH TRANSACTION SAFETY) ================= //
 app.post(['/api/matches/save-result', '/api/admin/update-result'], (req, res) => {
     const { match_id, home_score, away_score } = req.body;
 
     db.get(`SELECT * FROM matches WHERE id = ? OR custom_match_id = ?`, [match_id, match_id], (err, match) => {
         if (err || !match) return res.status(404).json({ success: false, message: 'Match not found' });
 
-        db.run(`UPDATE matches SET home_score = ?, away_score = ?, status = 'Finished' WHERE id = ?`, 
-            [home_score, away_score, match.id], (err) => {
-            if (err) return res.status(500).json({ success: false, error: err.message });
+        db.serialize(() => {
+            db.run(`BEGIN TRANSACTION`);
 
-            db.all(`SELECT * FROM bets WHERE (match_id = ? OR match_id = ?) AND status = 'Pending'`, [match.custom_match_id, match.id], (err, bets) => {
-                if (err) return res.status(500).json({ success: false, error: err.message });
-
-                if (!bets || bets.length === 0) {
-                    return res.json({ success: true, message: 'Match result saved! No pending bets to settle.' });
+            db.run(`UPDATE matches SET home_score = ?, away_score = ?, status = 'Finished' WHERE id = ?`, 
+                [home_score, away_score, match.id], (err) => {
+                if (err) {
+                    db.run(`ROLLBACK`);
+                    return res.status(500).json({ success: false, error: err.message });
                 }
 
-                let completedCount = 0;
-                bets.forEach(bet => {
-                    const odds = (bet.bet_type.toLowerCase().includes('body') || bet.bet_type.includes('ဘော်ဒီ')) ? match.body_odds : match.goal_odds;
-                    const outcome = calculateBetOutcome(
-                        bet.bet_type,
-                        bet.choice,
-                        odds,
-                        home_score,
-                        away_score,
-                        match.match_name,
-                        bet.amount
-                    );
+                db.all(`SELECT * FROM bets WHERE (match_id = ? OR match_id = ?) AND status = 'Pending'`, [match.custom_match_id, match.id], (err, bets) => {
+                    if (err) {
+                        db.run(`ROLLBACK`);
+                        return res.status(500).json({ success: false, error: err.message });
+                    }
 
-                    db.run(`UPDATE bets SET status = ? WHERE id = ?`, [outcome.status, bet.id], (err) => {
-                        if (outcome.returnAmount > 0) {
-                            db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [outcome.returnAmount, bet.username]);
-                            db.run(`INSERT INTO transactions (username, type, payment_method, amount, status, created_at) VALUES (?, 'Payout', 'Wallet', ?, 'Success', CURRENT_TIMESTAMP)`, [bet.username, outcome.returnAmount]);
-                        }
-                        
-                        completedCount++;
-                        if (completedCount === bets.length) {
-                            res.json({ success: true, message: 'Match result saved and all bets settled successfully!' });
-                        }
+                    if (!bets || bets.length === 0) {
+                        db.run(`COMMIT`);
+                        return res.json({ success: true, message: 'Match result saved! No pending bets to settle.' });
+                    }
+
+                    let completedCount = 0;
+                    let hasError = false;
+
+                    bets.forEach(bet => {
+                        const odds = (bet.bet_type.toLowerCase().includes('body') || bet.bet_type.includes('ဘော်ဒီ')) ? match.body_odds : match.goal_odds;
+                        const outcome = calculateBetOutcome(
+                            bet.bet_type,
+                            bet.choice,
+                            odds,
+                            home_score,
+                            away_score,
+                            match.match_name,
+                            bet.amount
+                        );
+
+                        db.run(`UPDATE bets SET status = ? WHERE id = ?`, [outcome.status, bet.id], (err) => {
+                            if (err) hasError = true;
+
+                            if (outcome.returnAmount > 0) {
+                                db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [outcome.returnAmount, bet.username]);
+                                db.run(`INSERT INTO transactions (username, type, payment_method, amount, status, created_at) VALUES (?, 'Payout', 'Wallet', ?, 'Success', CURRENT_TIMESTAMP)`, [bet.username, outcome.returnAmount]);
+                            }
+                            
+                            completedCount++;
+                            if (completedCount === bets.length) {
+                                if (hasError) {
+                                    db.run(`ROLLBACK`);
+                                    return res.status(500).json({ success: false, message: 'Error during settlement.' });
+                                } else {
+                                    db.run(`COMMIT`);
+                                    return res.json({ success: true, message: 'Match result saved and all bets settled successfully!' });
+                                }
+                            }
+                        });
                     });
                 });
             });
@@ -402,7 +449,7 @@ app.post(['/api/matches/save-result', '/api/admin/update-result'], (req, res) =>
     });
 });
 
-// ================= BETTING APIs ================= //
+// ================= BETTING APIs (WITH TRANSACTION SAFETY) ================= //
 app.get(['/api/bets', '/api/admin/bets'], (req, res) => {
     const { username } = req.query;
     let query = `SELECT * FROM bets`;
@@ -462,26 +509,46 @@ app.post('/api/user/place-bet', (req, res) => {
     }
 
     const totalDeduction = is_parlay ? Number(total_amount) : incomingBets.reduce((sum, b) => sum + Number(b.amount), 0);
+    if (isNaN(totalDeduction) || totalDeduction <= 0) {
+        return res.status(400).json({ success: false, message: 'ငွေပမာဏ မမှန်ကန်ပါ။' });
+    }
 
     db.get(`SELECT balance FROM users WHERE username = ?`, [username], (err, user) => {
         if (err || !user) return res.status(400).json({ success: false, message: 'User not found' });
         if (user.balance < totalDeduction) return res.status(400).json({ success: false, message: 'လက်ကျန်ငွေ မလုံလောက်ပါ။' });
 
-        db.run(`UPDATE users SET balance = balance - ? WHERE username = ?`, [totalDeduction, username], (err) => {
-            if (err) return res.status(500).json({ success: false, error: err.message });
+        db.serialize(() => {
+            db.run(`BEGIN TRANSACTION`);
 
-            const parlayGroupId = is_parlay ? 'PARLAY-' + Date.now() : null;
-            let completed = 0;
+            db.run(`UPDATE users SET balance = balance - ? WHERE username = ?`, [totalDeduction, username], (err) => {
+                if (err) {
+                    db.run(`ROLLBACK`);
+                    return res.status(500).json({ success: false, error: err.message });
+                }
 
-            incomingBets.forEach(b => {
-                db.run(`INSERT INTO bets (username, match_id, match_name, bet_type, choice, amount, odds_rate, status, parlay_group_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
-                    [username, b.match_id, b.match_name, b.bet_type, b.choice, is_parlay ? (completed === 0 ? totalDeduction : 0) : b.amount, b.odds_rate, parlayGroupId], (err) => {
-                    completed++;
-                    if (completed === incomingBets.length) {
-                        db.run(`INSERT INTO transactions (username, type, payment_method, amount, status, created_at) VALUES (?, ?, 'Wallet', ?, 'Completed', CURRENT_TIMESTAMP)`, 
-                            [username, is_parlay ? 'Parlay Bet' : 'Bet Placed', totalDeduction]);
-                        res.json({ success: true, message: 'Successfully placed bet(s)' });
-                    }
+                const parlayGroupId = is_parlay ? 'PARLAY-' + Date.now() : null;
+                let completed = 0;
+                let hasError = false;
+
+                incomingBets.forEach(b => {
+                    db.run(`INSERT INTO bets (username, match_id, match_name, bet_type, choice, amount, odds_rate, status, parlay_group_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
+                        [username, b.match_id, b.match_name, b.bet_type, b.choice, is_parlay ? (completed === 0 ? totalDeduction : 0) : b.amount, b.odds_rate, parlayGroupId], (err) => {
+                        if (err) hasError = true;
+                        completed++;
+
+                        if (completed === incomingBets.length) {
+                            if (hasError) {
+                                db.run(`ROLLBACK`);
+                                return res.status(500).json({ success: false, message: 'Failed to place bet.' });
+                            } else {
+                                db.run(`INSERT INTO transactions (username, type, payment_method, amount, status, created_at) VALUES (?, ?, 'Wallet', ?, 'Completed', CURRENT_TIMESTAMP)`, 
+                                    [username, is_parlay ? 'Parlay Bet' : 'Bet Placed', totalDeduction], () => {
+                                    db.run(`COMMIT`);
+                                    res.json({ success: true, message: 'Successfully placed bet(s)' });
+                                });
+                            }
+                        }
+                    });
                 });
             });
         });
@@ -491,8 +558,11 @@ app.post('/api/user/place-bet', (req, res) => {
 // ================= DEPOSIT, WITHDRAW & ADMIN APPROVAL APIs ================= //
 app.post('/api/user/deposit', (req, res) => {
     const { username, payment_method, amount, transaction_id } = req.body;
+    const amt = Number(amount);
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ success: false, message: 'ငွေပမာဏ မမှန်ကန်ပါ။' });
+
     db.run(`INSERT INTO transactions (username, type, payment_method, amount, transaction_id, status, created_at) VALUES (?, 'Deposit', ?, ?, ?, 'Pending', CURRENT_TIMESTAMP)`,
-        [username, payment_method, amount, transaction_id], function(err) {
+        [username, payment_method, amt, transaction_id], function(err) {
         if (err) return res.status(500).json({ success: false, error: err.message });
         res.json({ success: true, message: 'Deposit request submitted successfully' });
     });
@@ -500,18 +570,31 @@ app.post('/api/user/deposit', (req, res) => {
 
 app.post('/api/user/withdraw', (req, res) => {
     const { username, payment_method, account_name, phone, amount } = req.body;
+    const amt = Number(amount);
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ success: false, message: 'ငွေပမာဏ မမှန်ကန်ပါ။' });
     
     db.get(`SELECT balance FROM users WHERE username = ?`, [username], (err, user) => {
         if (err || !user) return res.status(400).json({ success: false, message: 'User not found' });
-        if (user.balance < amount) return res.status(400).json({ success: false, message: 'Insufficient balance' });
+        if (user.balance < amt) return res.status(400).json({ success: false, message: 'Insufficient balance' });
 
-        db.run(`UPDATE users SET balance = balance - ? WHERE username = ?`, [amount, username], (err) => {
-            if (err) return res.status(500).json({ success: false, error: err.message });
+        db.serialize(() => {
+            db.run(`BEGIN TRANSACTION`);
 
-            db.run(`INSERT INTO transactions (username, type, payment_method, account_name, phone, amount, status, created_at) VALUES (?, 'Withdraw', ?, ?, ?, ?, 'Pending', CURRENT_TIMESTAMP)`,
-                [username, payment_method, account_name, phone, amount], function(err) {
-                if (err) return res.status(500).json({ success: false, error: err.message });
-                res.json({ success: true, message: 'Withdraw request submitted successfully' });
+            db.run(`UPDATE users SET balance = balance - ? WHERE username = ?`, [amt, username], (err) => {
+                if (err) {
+                    db.run(`ROLLBACK`);
+                    return res.status(500).json({ success: false, error: err.message });
+                }
+
+                db.run(`INSERT INTO transactions (username, type, payment_method, account_name, phone, amount, status, created_at) VALUES (?, 'Withdraw', ?, ?, ?, ?, 'Pending', CURRENT_TIMESTAMP)`,
+                    [username, payment_method, account_name, phone, amt], function(err) {
+                    if (err) {
+                        db.run(`ROLLBACK`);
+                        return res.status(500).json({ success: false, error: err.message });
+                    }
+                    db.run(`COMMIT`);
+                    res.json({ success: true, message: 'Withdraw request submitted successfully' });
+                });
             });
         });
     });
@@ -533,22 +616,31 @@ app.get('/api/user/transactions', (req, res) => {
     });
 });
 
-// ** Newly Added: Admin Transaction Action API (Approve / Reject) **
+// Admin Transaction Action API (Approve / Reject) with Transaction Safety
 app.post('/api/admin/transactions/action', (req, res) => {
     const { transaction_id, status, username, amount, type } = req.body; 
+    const amt = Number(amount);
 
-    db.run(`UPDATE transactions SET status = ? WHERE id = ?`, [status, transaction_id], function(err) {
-        if (err) return res.status(500).json({ success: false, error: err.message });
+    db.serialize(() => {
+        db.run(`BEGIN TRANSACTION`);
 
-        if (status === 'Approved' && type === 'Deposit') {
-            db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amount, username]);
-        }
-        
-        if (status === 'Rejected' && type === 'Withdraw') {
-            db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amount, username]);
-        }
+        db.run(`UPDATE transactions SET status = ? WHERE id = ?`, [status, transaction_id], function(err) {
+            if (err) {
+                db.run(`ROLLBACK`);
+                return res.status(500).json({ success: false, error: err.message });
+            }
 
-        res.json({ success: true, message: `ငွေစာရင်း တောင်းဆိုမှုမှာ ${status} ဖြစ်သွားပါပြီ။` });
+            if (status === 'Approved' && type === 'Deposit') {
+                db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amt, username]);
+            }
+            
+            if (status === 'Rejected' && type === 'Withdraw') {
+                db.run(`UPDATE users SET balance = balance + ? WHERE username = ?`, [amt, username]);
+            }
+
+            db.run(`COMMIT`);
+            res.json({ success: true, message: `ငွေစာရင်း တောင်းဆိုမှုမှာ ${status} ဖြစ်သွားပါပြီ။` });
+        });
     });
 });
 
